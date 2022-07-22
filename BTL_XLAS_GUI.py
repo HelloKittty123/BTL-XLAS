@@ -11,6 +11,7 @@ from scipy import signal
 import cv2
 from matplotlib import pyplot as plt
 import math
+from skimage import img_as_float
 
 # Xây dựng phép tích chập và phép tương quan chéo
 def convolute(image, kernel):
@@ -18,6 +19,7 @@ def convolute(image, kernel):
   r,c = kernel.shape
   flipped_kernel = np.zeros((r,c),np.float32)
   h=0
+  # Ma trận có số hàng và cột lẻ thì lật ngược ma trận 180 độ
   if r==c and r%2 :
     h = int((r-1)/2)
     for i in range(-h,h+1):
@@ -171,22 +173,170 @@ def testGaussianFilter():
     plt.subplot(223), plt.title('GaussianFilter v Correlation'), plt.imshow(GaussianFilt_corr[:,:,::-1])
     plt.show()
 #----------------------------------------
+# Bộ lọc Unsharp mask
+def unsharpMask():
+    filepath = filedialog.askopenfilename(title="Open file okay?", )
+    img = cv2.imread(filepath)
+    # entry1.delete(0, END)
+    # entry1.insert(0, str(filepath))
+    image = img_as_float(img)
+    gaussian_3 = cv2.GaussianBlur(image, (0, 0), 2.0)
+    unsharp_image = image + 2 * (image - gaussian_3)  # K =2
+    unsharp_image_2 = image * 2 - gaussian_3  # k = 1
+    # unsharp = cv2.addWeighted(image, 2.0, gaussian_3, -1.0, 0)
+    # print(unsharp_image_2[320:350,90:110])
+    # print("/////////")
+    # print(unsharp[320:350,90:110])
+    # cv2.imwrite("example_unsharp.jpg", unsharp_image)
+    plt.figure(figsize=(15, 15))
+    plt.subplot(131), plt.title('Original'), plt.imshow(image[:, :, ::-1])
+    plt.subplot(132), plt.title('Unsharp mask k = 2'), plt.imshow(unsharp_image[:, :, ::-1])
+    plt.subplot(133), plt.title('Unsharp mask k = 1'), plt.imshow(unsharp_image_2[:, :, ::-1])
+    # plt.subplot(144), plt.title('Mean v Correlation'), plt.imshow(unsharp[:,:,::-1])
+    plt.show()
+#----------------------------------------
+# Bộ lọc Laplacian
+# Xây dựng bộ lọc Laplacian
+def LaplaceFilter(image,kernel_type = 1,convol=1):
+  #Tạo kernel
+  if kernel_type==2:
+    kernel = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]])
+  elif kernel_type==3:
+    kernel = np.array([[1,-2,1],[-2,4,-2],[1,-2,1]])
+  else:
+    kernel = np.array([[0,1,0],[1,-4,1],[0,1,0]])
+  #Tích chập hoặc tương quan
+  if convol == 1:
+    output = convolute(image,kernel)
+  else:
+    output = cv2.filter2D(image,-1,kernel,borderType=cv2.BORDER_ISOLATED)
+  return output
+
+
+# Test bộ lọc Laplacian
+def testLaplacian():
+    filepath = filedialog.askopenfilename(title="Open file okay?", )
+    img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
+    entry1.delete(0, END)
+    entry1.insert(0, str(filepath))
+    Laplacian = cv2.Laplacian(img,cv2.CV_64F)
+    LaplacianFilt1 = LaplaceFilter(img)
+    LaplacianFilt2 = LaplaceFilter(img,2)
+    LaplacianFilt3 = LaplaceFilter(img,3)
+    LaplacianFilt1_corr = LaplaceFilter(img,1,0)
+    LaplacianFilt2_corr = LaplaceFilter(img,2,0)
+    LaplacianFilt3_corr = LaplaceFilter(img,3,0)
+
+    cv2.imwrite('girl_gray.jpg', img)
+    cv2.imwrite('Laplacian.jpg', Laplacian)
+    cv2.imwrite('Laplacian1.jpg',LaplacianFilt1)
+    cv2.imwrite('Laplacian2.jpg', LaplacianFilt2)
+    cv2.imwrite('Laplacian3.jpg', LaplacianFilt3)
+    cv2.imwrite('Laplacian1_corr.jpg',LaplacianFilt1_corr)
+    cv2.imwrite('Laplacian2_corr.jpg', LaplacianFilt2_corr)
+    cv2.imwrite('Laplacian3_corr.jpg', LaplacianFilt3_corr)
+
+    plt.figure(figsize=(18,18))
+    plt.subplot(421), plt.title('Original'), plt.imshow(img,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(422), plt.title('Laplacian'), plt.imshow(Laplacian,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(423), plt.title('LaplacianFilt type1'), plt.imshow(LaplacianFilt1,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(425), plt.title('LaplacianFilt type2'), plt.imshow(LaplacianFilt2,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(427), plt.title('LaplacianFilt type3'), plt.imshow(LaplacianFilt3,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(424), plt.title('LaplacianFilt type1 correlation'), plt.imshow(LaplacianFilt1_corr,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(426), plt.title('LaplacianFilt type2 correlation'), plt.imshow(LaplacianFilt2_corr,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(428), plt.title('LaplacianFilt type3 correlation'), plt.imshow(LaplacianFilt3_corr,cmap='gray',vmin=0,vmax=255)
+    plt.show()
+#----------------------------------------
+# Bộ lọc Sobel
+def SobelFilter(image,gauss_ksize=5,dx=1,dy=1,convol=1,threshold=60):
+  GaussKernel = createGaussianKernel(gauss_ksize,1)
+  X = np.array([[1,0,-1],[2,0,-2],[1,0,-1]])
+  Y = np.array([[1,2,1],[0,0,0],[-1,-2,-1]])
+    #Tích chập hoặc tương quan
+  if convol == 1:
+      kernel_x = convolute(GaussKernel,X)
+      sobel_x = convolute(image,kernel_x)
+      kernel_y = convolute(GaussKernel,Y)
+      sobel_y = convolute(image,kernel_y)
+  else:
+      kernel_x = cv2.filter2D(GaussKernel,cv2.CV_64F,X,borderType=cv2.BORDER_ISOLATED)
+      sobel_x = cv2.filter2D(image,cv2.CV_64F,kernel_x,borderType=cv2.BORDER_ISOLATED)
+      kernel_y = cv2.filter2D(GaussKernel,cv2.CV_64F,Y,borderType=cv2.BORDER_ISOLATED)
+      sobel_y = cv2.filter2D(image,cv2.CV_64F,kernel_y,borderType=cv2.BORDER_ISOLATED)
+
+  if dx==1 and dy==0:
+    return sobel_x
+  if dx==0 and dy==1:
+    return sobel_y
+  sobel = np.sqrt(np.square(sobel_x)+np.square(sobel_y))
+  img_sobel = np.uint8(sobel)
+  for i in range(img_sobel.shape[0]):
+      for j in range(img_sobel.shape[1]):
+          if img_sobel[i][j] < threshold:
+              img_sobel[i][j] = 0
+  return img_sobel
+
+# Test bộ lọc Sobel
+def testSobel():
+    filepath = filedialog.askopenfilename(title="Open file okay?", )
+    img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
+    entry1.delete(0, END)
+    entry1.insert(0, str(filepath))
+    Sobelx = cv2.Sobel(img,cv2.CV_64F,1,0)
+    Sobely = cv2.Sobel(img,cv2.CV_64F,0,1)
+    Sobel = cv2.Sobel(img,cv2.CV_64F,1,1)
+    SobelFiltx = SobelFilter(img,5,1,0)
+    SobelFilty = SobelFilter(img,5,0,1)
+    SobelFilt = SobelFilter(img,5,1,1)
+    SobelFiltx_corr = SobelFilter(img,5,1,0,0)
+    SobelFilty_corr = SobelFilter(img,5,0,1,0)
+    SobelFilt_corr = SobelFilter(img,5,1,1,0)
+
+    cv2.imwrite('Sobelx.jpg', Sobelx)
+    cv2.imwrite('Sobely.jpg', Sobely)
+    cv2.imwrite('Sobel.jpg', Sobel)
+    cv2.imwrite('SobelFiltx.jpg',SobelFiltx)
+    cv2.imwrite('SobelFilty.jpg',SobelFilty)
+    cv2.imwrite('SobelFilt.jpg',SobelFilt)
+    cv2.imwrite('SobelFiltx_corr.jpg',SobelFiltx_corr)
+    cv2.imwrite('SobelFilty_corr.jpg',SobelFilty_corr)
+    cv2.imwrite('SobelFilt_corr.jpg',SobelFilt_corr)
+
+    plt.figure(figsize=(18,18))
+    plt.subplot(431), plt.title('Original'), plt.imshow(img,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(434), plt.title('Sobel'), plt.imshow(Sobel,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(435), plt.title('SobelFilter'), plt.imshow(SobelFilt,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(436), plt.title('SobelFilter correlation'), plt.imshow(SobelFilt_corr,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(437), plt.title('Sobel x'), plt.imshow(Sobelx,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(438), plt.title('SobelFilter x'), plt.imshow(SobelFiltx,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(439), plt.title('SobelFilter x correlation'), plt.imshow(SobelFiltx_corr,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(4,3,10), plt.title('Sobel y'), plt.imshow(Sobely,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(4,3,11), plt.title('SobelFilter y'), plt.imshow(SobelFilty,cmap='gray',vmin=0,vmax=255)
+    plt.subplot(4,3,12), plt.title('SobelFilter y correlation'), plt.imshow(SobelFilty_corr,cmap='gray',vmin=0,vmax=255)
+    plt.show()
+#----------------------------------------
 
 # Ứng dụng
 root = Tk()
 root.title("BÀI TẬP LỚN XỬ LÝ ẢNH")
-root.geometry("660x550")
-logo = Image.open(r'./screen.jpg')
+root.geometry("660x450")
+logo = Image.open(r'./screen.png')
 logo = ImageTk.PhotoImage(logo)
 logo_lb = tk.Label(image=logo)
 logo_lb.image = logo
 logo_lb.grid(column = 1 , row = 1)
 button = Button(text="Bộ lọc trung vị",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testMedianFilter)
-button.place(x=250,y=50)
+button.place(x=50,y=50)
 button1 = Button(text="Bộ lọc trung bình",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testMeanFilter)
-button1.place(x=240,y=150)
+button1.place(x=50,y=150)
 button2 = Button(text="Bộ lọc Gaussian",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testGaussianFilter)
-button2.place(x=245,y=250)
+button2.place(x=50,y=250)
+button3 = Button(text="Bộ lọc Unsharp Mask",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=unsharpMask)
+button3.place(x=350,y=50)
+button4 = Button(text="Bộ lọc Laplacian",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testLaplacian)
+button4.place(x=350,y=150)
+button5 = Button(text="Bộ lọc Sobel",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testSobel)
+button5.place(x=350,y=250)
 entry1 = Entry(root,font=("Times New Roman",14) ,width = 50)
 entry1.place(x = 100 , y =350)
 
