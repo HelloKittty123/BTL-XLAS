@@ -9,6 +9,7 @@ from tkinter import filedialog
 import numpy as np
 from scipy import signal
 import cv2
+
 from matplotlib import pyplot as plt
 import math
 from skimage import img_as_float
@@ -84,7 +85,10 @@ def testMedianFilter():
     entry1.insert(0, str(filepath))
     medianFilt = np.copy(img)
     for i in range(3):
-     medianFilt[:,:,i]=medianFilter(img[:,:,i],5)
+        if (len(entry2.get()) and int(entry2.get())%2 == 1):
+            medianFilt[:, :, i] = medianFilter(img[:, :, i], int(entry2.get()))
+        else:
+            medianFilt[:,:,i]=medianFilter(img[:,:,i],5)
 
     cv2.imwrite('medianFilter.jpg',medianFilt)
     plt.figure(figsize=(18,18))
@@ -112,8 +116,12 @@ def testMeanFilter():
     entry1.insert(0, str(filepath))
     mean = mean_corr = np.copy(img)
     for i in range(3):
-        mean[:,:,i] = meanFilter(img[:,:,i],5)
-        mean_corr[:,:,i] = meanFilter(img[:,:,i],5,0)
+        if (len(entry2.get()) and int(entry2.get())%2 == 1):
+            mean[:, :, i] = meanFilter(img[:, :, i], int(entry2.get()))
+            mean_corr[:, :, i] = meanFilter(img[:, :, i], int(entry2.get()), 0)
+        else:
+            mean[:,:,i] = meanFilter(img[:,:,i],5)
+            mean_corr[:,:,i] = meanFilter(img[:,:,i],5,0)
 
     cv2.imwrite('mean.jpg', mean)
     cv2.imwrite('mean_corr.jpg', mean)
@@ -159,8 +167,12 @@ def testGaussianFilter():
     entry1.insert(0, str(filepath))
     GaussianFilt = GaussianFilt_corr = np.copy(img)
     for i in range(3):
-        GaussianFilt[:,:,i] = GaussianFilter(img[:,:,i],7,math.sqrt(2))
-        GaussianFilt_corr[:,:,i] = GaussianFilter(img[:,:,i],7,math.sqrt(2),0)
+        if (len(entry2.get()) and int(entry2.get())%2 == 1):
+            GaussianFilt[:, :, i] = GaussianFilter(img[:, :, i], int(entry2.get()), math.sqrt(2))
+            GaussianFilt_corr[:, :, i] = GaussianFilter(img[:, :, i], int(entry2.get()), math.sqrt(2), 0)
+        else:
+            GaussianFilt[:,:,i] = GaussianFilter(img[:,:,i],7,math.sqrt(2))
+            GaussianFilt_corr[:,:,i] = GaussianFilter(img[:,:,i],7,math.sqrt(2),0)
 
     cv2.imwrite('GaussianFilter.jpg', GaussianFilt)
     cv2.imwrite('GaussianFilter_corr.jpg', GaussianFilt_corr)
@@ -316,11 +328,83 @@ def testSobel():
     plt.show()
 #----------------------------------------
 
+# Bộ lọc hiệu ứng mùa đông
+def addSnow(image):
+    image_HLS = cv2.cvtColor(image,cv2.COLOR_RGB2HLS) ## Conversion to HLS
+    image_HLS = np.array(image_HLS, dtype = np.float64)
+    brightness_coefficient = 2.5
+    snow_point=140 ## increase this for more snow
+    image_HLS[:,:,1][image_HLS[:,:,1]<snow_point] = image_HLS[:,:,1][image_HLS[:,:,1]<snow_point]*brightness_coefficient ## scale pixel values up for channel 1(Lightness)
+    image_HLS[:,:,1][image_HLS[:,:,1]>255]  = 255 ##Sets all values above 255 to 255
+    image_HLS = np.array(image_HLS, dtype = np.uint8)
+    image_RGB = cv2.cvtColor(image_HLS,cv2.COLOR_HLS2RGB) ## Conversion to RGB
+    return image_RGB
+
+# Test bộ lọc hiệu ứng mùa đông
+def testAddSnow():
+    filepath = filedialog.askopenfilename(title="Open file okay?", )
+    img = cv2.imread(filepath)
+    entry1.delete(0, END)
+    entry1.insert(0, str(filepath))
+    img_cop = addSnow(img)
+    cv2.imwrite('SnowFilter.jpg', img_cop)
+    plt.figure(figsize=(10,10))
+    plt.subplot(221), plt.title('Original'), plt.imshow(img[:,:,::-1])
+    plt.subplot(222), plt.title('SnowFilter'), plt.imshow(img_cop[:,:,::-1])
+    plt.show()
+#----------------------------------------
+
+#Bộ lọc DFT
+def testDFT():
+    filepath = filedialog.askopenfilename(title="Open file okay?", )
+    img = cv2.imread(filepath, 0)
+    entry1.delete(0, END)
+    entry1.insert(0, str(filepath))
+    dft = cv2.dft(np.float32(img), flags=cv2.DFT_COMPLEX_OUTPUT)
+
+    dft_shift = np.fft.fftshift(dft)
+
+    magnitude_spectrum = 20 * np.log(cv2.magnitude(dft_shift[:, :, 0], dft_shift[:, :, 1]))
+
+    rows, cols = img.shape
+    crow, ccol = int(rows / 2), int(cols / 2)
+
+    mask = np.ones((rows, cols, 2), np.uint8)
+    r = 80
+    center = [crow, ccol]
+    x, y = np.ogrid[:rows, :cols]
+    mask_area = (x - center[0]) ** 2 + (y - center[1]) ** 2 <= r * r
+    mask[mask_area] = 0
+
+    # apply mask and inverse DFT
+    fshift = dft_shift * mask
+
+    fshift_mask_mag = 2000 * np.log(cv2.magnitude(fshift[:, :, 0], fshift[:, :, 1]))
+
+    f_ishift = np.fft.ifftshift(fshift)
+    img_back = cv2.idft(f_ishift)
+    img_back = cv2.magnitude(img_back[:, :, 0], img_back[:, :, 1])
+
+    fig = plt.figure(figsize=(12, 12))
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax1.imshow(img, cmap='gray')
+    ax1.title.set_text('Input Image')
+    ax2 = fig.add_subplot(2, 2, 2)
+    ax2.imshow(magnitude_spectrum, cmap='gray')
+    ax2.title.set_text('FFT of image')
+    ax3 = fig.add_subplot(2, 2, 3)
+    ax3.imshow(fshift_mask_mag, cmap='gray')
+    ax3.title.set_text('FFT + Mask')
+    ax4 = fig.add_subplot(2, 2, 4)
+    ax4.imshow(img_back, cmap='gray')
+    ax4.title.set_text('After inverse FFT')
+    plt.show()
+#----------------------------------------
 # Ứng dụng
 root = Tk()
 root.title("BÀI TẬP LỚN XỬ LÝ ẢNH")
-root.geometry("660x450")
-logo = Image.open(r'./screen.png')
+root.geometry("700x550")
+logo = Image.open(r'./3.jpg')
 logo = ImageTk.PhotoImage(logo)
 logo_lb = tk.Label(image=logo)
 logo_lb.image = logo
@@ -337,7 +421,18 @@ button4 = Button(text="Bộ lọc Laplacian",bg = 'pink',fg = 'white',font = 'Ti
 button4.place(x=350,y=150)
 button5 = Button(text="Bộ lọc Sobel",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testSobel)
 button5.place(x=350,y=250)
+button6 = Button(text="Bộ lọc tạo hiệu ứng mùa đông",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testAddSnow)
+button6.place(x=50,y=350)
+button7 = Button(text="Bộ lọc DFT",bg = 'pink',fg = 'white',font = 'Times 20 bold',borderwidth= 0, command=testDFT)
+button7.place(x=450,y=350)
+lbl1 = Label(root, text = "Path File:")
+lbl1.place(x=40, y=450)
 entry1 = Entry(root,font=("Times New Roman",14) ,width = 50)
-entry1.place(x = 100 , y =350)
+entry1.place(x = 100 , y =450)
+lbl2 = Label(root, text = "Kernel size:")
+lbl2.place(x=40, y=500)
+entry2 = Entry(root,font=("Times New Roman",14) ,width = 50)
+entry2.place(x = 110 , y =500)
+
 
 root.mainloop()
